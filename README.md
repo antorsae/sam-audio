@@ -50,7 +50,8 @@ batch = processor(
     descriptions=[description],
 ).to("cuda")
 
-result = model.separate(batch)
+with torch.inference_mode():
+   result = model.separate(batch)
 
 # Save separated audio
 sample_rate = processor.audio_sampling_rate
