@@ -1,6 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates. All Rights Reserved\n
 
 from dataclasses import dataclass
+import logging
 from typing import Optional
 
 import torch
@@ -30,6 +31,13 @@ class SAMAudioJudgeOutput:
     faithfulness: Optional[torch.Tensor] = None
     text_model_output: BaseModelOutputWithPooling = None
     audio_model_output: BaseModelOutputWithPooling = None
+
+
+logger = logging.getLogger(__name__)
+
+
+def _format_bytes(num_bytes: int) -> str:
+    return f"{num_bytes / (1024 ** 3):.2f} GiB"
 
 
 class SAMAudioJudgeModel(BaseModel):
@@ -99,6 +107,23 @@ class SAMAudioJudgeModel(BaseModel):
             self._get_text_output(input_ids, attention_mask).pooler_output
         )
         stacked_audios = torch.cat([input_values, separated_values], dim=0)
+        if logger.isEnabledFor(logging.INFO):
+            audio_bytes = stacked_audios.numel() * stacked_audios.element_size()
+            logger.info(
+                "JudgeModel audio_codec input: shape=%s dtype=%s device=%s size=%s",
+                tuple(stacked_audios.shape),
+                stacked_audios.dtype,
+                stacked_audios.device,
+                _format_bytes(audio_bytes),
+            )
+            if stacked_audios.device.type == "cuda":
+                allocated = torch.cuda.memory_allocated(stacked_audios.device)
+                reserved = torch.cuda.memory_reserved(stacked_audios.device)
+                logger.info(
+                    "JudgeModel cuda mem: allocated=%s reserved=%s",
+                    _format_bytes(allocated),
+                    _format_bytes(reserved),
+                )
         stacked_codec_features = self.audio_codec(stacked_audios)
         feature_padding_mask = None
         if padding_mask is not None:

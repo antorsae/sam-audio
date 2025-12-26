@@ -86,6 +86,19 @@ class DACVAE(DACVAEEncoder, Codec):
     def decode(self, encoded_frames: torch.Tensor) -> torch.Tensor:
         with torch.backends.cudnn.flags(enabled=False):
             emb = self.quantizer.out_proj(encoded_frames)
+            if hasattr(self, "decoder") and self.decoder is not None:
+                try:
+                    decoder_param = next(self.decoder.parameters())
+                except StopIteration:
+                    decoder_param = None
+                if decoder_param is not None:
+                    if (
+                        emb.device != decoder_param.device
+                        or emb.dtype != decoder_param.dtype
+                    ):
+                        emb = emb.to(
+                            device=decoder_param.device, dtype=decoder_param.dtype
+                        )
             return self.decoder(emb)
 
     def feature_idx_to_wav_idx(self, feature_idx, sample_rate=None):
